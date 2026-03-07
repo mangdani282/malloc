@@ -59,3 +59,7 @@ build/
 
 # Other
 vcpkg_installed
+
+# Executable
+malloc
+test_basic
