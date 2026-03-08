@@ -2,11 +2,12 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 int main() {
     // Create string using malloc
     printf("String:\n");
-    size_t str_size = sizeof(char) * 128;
+    size_t str_size = sizeof(char) * 32;
     char *str = my_malloc(str_size);
     assert(str != NULL);
     strcpy(str, "Hello, world!");
@@ -15,9 +16,11 @@ int main() {
 
     // Check header block
     block_header_t *header = (void*)str - HEADER_SIZE;
-    assert(header->size == str_size);
+    assert(header->size >= str_size);
     assert(header->in_use);
     printf("Size: %lu, In Use: %d, Next: %p\n\n", header->size, header->in_use, header->next);
+    my_free(str);
+    str = NULL;
 
 
     // Create int array using malloc
@@ -36,9 +39,11 @@ int main() {
 
     // Check header block
     header = (void*)arr - HEADER_SIZE;
-    assert(header->size == arr_size);
+    assert(header->size >= arr_size);
     assert(header->in_use);
     printf("Size: %lu, In Use: %d, Next: %p\n\n", header->size, header->in_use, header->next);
+    my_free(arr);
+    arr = NULL;
 
 
     // Create struct using malloc
@@ -61,7 +66,21 @@ int main() {
 
     // Check header block
     header = (void*)car - HEADER_SIZE;
-    assert(header->size == struct_size);
+    assert(header->size >= struct_size);
     assert(header->in_use);
-    printf("Size: %lu, In Use: %d, Next: %p\n", header->size, header->in_use, header->next);
+    printf("Size: %lu, In Use: %d, Next: %p\n\n", header->size, header->in_use, header->next);
+    my_free(car);
+    car = NULL;
+
+
+    // Check for reused block
+    size_t size = 8;
+    void * p1 = my_malloc(size);
+    my_free(p1);
+    void * p2 = my_malloc(size);
+    assert(p1 == p2);
+    printf("p1: %p, p2: %p\n", p1, p2);
+    my_free(p2);
+    p1 = NULL;
+    p2 = NULL;
 }
