@@ -12,6 +12,9 @@ typedef struct block_header {
 
 #define HEADER_SIZE sizeof(block_header_t)
 
+extern block_header_t *free_list;
+
 void *my_malloc(size_t size);
+void my_free(void *ptr);
 
 #endif
