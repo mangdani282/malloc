@@ -63,3 +63,6 @@ vcpkg_installed
 # Executable
 malloc
 test_basic
+
+# Core dumps
+core
