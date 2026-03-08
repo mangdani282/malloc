@@ -12,4 +12,6 @@ typedef struct block_header {
 
 #define HEADER_SIZE sizeof(block_header_t)
 
+void *my_malloc(size_t size);
+
 #endif
