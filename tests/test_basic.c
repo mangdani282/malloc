@@ -1,8 +1,9 @@
-#include "src/allocator.h"
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdbool.h>
+
+#include "../src/allocator.h"
 
 int main() {
     // Create string using malloc
@@ -13,15 +14,15 @@ int main() {
     strcpy(str, "Hello, world!");
     assert(strcmp(str, "Hello, world!") == 0);
     printf("%s\n", str);
-
     // Check header block
-    block_header_t *header = (void*)str - HEADER_SIZE;
+    block_header_t *header = (void *)str - HEADER_SIZE;
     assert(header->size >= str_size);
     assert(header->in_use);
     printf("Size: %lu, In Use: %d, Next: %p\n\n", header->size, header->in_use, header->next);
     my_free(str);
+    // Test free function
+    assert(!header->in_use);
     str = NULL;
-
 
     // Create int array using malloc
     printf("Int array:\n");
@@ -36,21 +37,19 @@ int main() {
     assert(arr[9] == 34);
     for (int i = 0; i < 10; i++) printf("%d ", arr[i]);
     printf("\n");
-
     // Check header block
-    header = (void*)arr - HEADER_SIZE;
+    header = (void *)arr - HEADER_SIZE;
     assert(header->size >= arr_size);
     assert(header->in_use);
     printf("Size: %lu, In Use: %d, Next: %p\n\n", header->size, header->in_use, header->next);
     my_free(arr);
     arr = NULL;
 
-
     // Create struct using malloc
     printf("Struct:\n");
     struct Car {
-        char* make;
-        char* model;
+        char *make;
+        char *model;
         int num_wheels;
     };
     size_t struct_size = sizeof(struct Car) * 10;
@@ -63,24 +62,49 @@ int main() {
     assert(strcmp(car->model, "MX-5") == 0);
     assert(car->num_wheels == 4);
     printf("Make: %s, Model: %s, Number of Wheels: %d\n", car->make, car->model, car->num_wheels);
-
     // Check header block
-    header = (void*)car - HEADER_SIZE;
+    header = (void *)car - HEADER_SIZE;
     assert(header->size >= struct_size);
     assert(header->in_use);
     printf("Size: %lu, In Use: %d, Next: %p\n\n", header->size, header->in_use, header->next);
     my_free(car);
     car = NULL;
 
-
     // Check for reused block
     size_t size = 8;
-    void * p1 = my_malloc(size);
+    void *p1 = my_malloc(size);
     my_free(p1);
-    void * p2 = my_malloc(size);
+    void *p2 = my_malloc(size);
     assert(p1 == p2);
-    printf("p1: %p, p2: %p\n", p1, p2);
+    printf("p1: %p, p2: %p\n\n", p1, p2);
     my_free(p2);
     p1 = NULL;
     p2 = NULL;
+
+    // Test reallloc
+    arr = my_malloc(size);
+    arr[0] = 10;
+    arr[1] = 20;
+    printf("arr[0]: %d, arr[1]: %d\n", arr[0], arr[1]);
+    header = (void *)arr - HEADER_SIZE;
+    assert(header->size >= size);
+    arr = my_realloc(arr, size * 2);
+    header = (void *)arr - HEADER_SIZE;
+    assert(header->size >= size * 2);
+    assert(arr[0] == 10);
+    assert(arr[1] == 20);
+    printf("arr[0]: %d, arr[1]: %d\n\n", arr[0], arr[1]);
+    my_free(arr);
+
+    // Test calloc
+    char *char_arr = my_calloc(2, size / 2);
+    header = (void *)char_arr - HEADER_SIZE;
+    assert(header->size >= size);
+    printf("char_arr: %d", *char_arr);
+    for (char *p = char_arr; p < char_arr + size; p++) {
+        assert(!*p);
+        printf(",%d", *p);
+    }
+    printf("\n\n");
+    my_free(char_arr);
 }
