@@ -71,6 +71,7 @@ int main() {
     car = NULL;
 
     // Check for reused block
+    printf("Free List:\n");
     size_t size = 8;
     void *p1 = my_malloc(size);
     my_free(p1);
@@ -82,6 +83,7 @@ int main() {
     p2 = NULL;
 
     // Test reallloc
+    printf("realloc():\n");
     arr = my_malloc(size);
     arr[0] = 10;
     arr[1] = 20;
@@ -97,6 +99,7 @@ int main() {
     my_free(arr);
 
     // Test calloc
+    printf("calloc():\n");
     char *char_arr = my_calloc(2, size / 2);
     header = (void *)char_arr - HEADER_SIZE;
     assert(header->size >= size);
@@ -107,4 +110,15 @@ int main() {
     }
     printf("\n\n");
     my_free(char_arr);
+
+    // Test splitting
+    p1 = my_malloc(64);
+    my_free(p1);
+    printf("test\n");
+    p1 = my_malloc(20);
+    p2 = my_malloc(20);
+    printf("p1: %p, p1 + HEADER_SIZE + 20: %p, p2: %p\n\n", p1, (void *)p1 + HEADER_SIZE + 20, p2);
+    assert((void *)p1 + HEADER_SIZE + 20 == p2);
+    my_free(p1);
+    my_free(p2);
 }
