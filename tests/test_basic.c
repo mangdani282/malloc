@@ -5,7 +5,14 @@
 
 #include "../src/allocator.h"
 
+// Get size of block given pointer to memory
+size_t get_size(void *p) {
+    block_header_t *header = (void *)p - HEADER_SIZE;
+    return header->size;
+}
+
 int main() {
+    printf("%p %p %p\n", free_lists[0], free_lists[1], free_lists[2]);
     // Create string using malloc
     printf("String:\n");
     size_t str_size = sizeof(char) * 32;
@@ -16,16 +23,16 @@ int main() {
     printf("%s\n", str);
     // Check header block
     block_header_t *header = (void *)str - HEADER_SIZE;
+    printf("Size: %lu, In Use: %d, Next: %p\n\n", header->size, header->in_use, header->next);
     assert(header->size >= str_size);
     assert(header->in_use);
-    printf("Size: %lu, In Use: %d, Next: %p\n\n", header->size, header->in_use, header->next);
     my_free(str);
     // Test free function
     assert(!header->in_use);
     str = NULL;
 
     // Create int array using malloc
-    printf("Int array:\n");
+    printf("Int Array:\n");
     size_t arr_size = sizeof(int) * 10;
     int *arr = my_malloc(arr_size);
     assert(arr != NULL);
@@ -88,11 +95,9 @@ int main() {
     arr[0] = 10;
     arr[1] = 20;
     printf("arr[0]: %d, arr[1]: %d\n", arr[0], arr[1]);
-    header = (void *)arr - HEADER_SIZE;
-    assert(header->size >= size);
+    assert(get_size(arr) >= size);
     arr = my_realloc(arr, size * 2);
-    header = (void *)arr - HEADER_SIZE;
-    assert(header->size >= size * 2);
+    assert(get_size(arr) >= size * 2);
     assert(arr[0] == 10);
     assert(arr[1] == 20);
     printf("arr[0]: %d, arr[1]: %d\n\n", arr[0], arr[1]);
@@ -101,8 +106,7 @@ int main() {
     // Test calloc
     printf("calloc():\n");
     char *char_arr = my_calloc(2, size / 2);
-    header = (void *)char_arr - HEADER_SIZE;
-    assert(header->size >= size);
+    assert(get_size(char_arr) >= size);
     printf("char_arr: %d", *char_arr);
     for (char *p = char_arr; p < char_arr + size; p++) {
         assert(!*p);
@@ -112,13 +116,28 @@ int main() {
     my_free(char_arr);
 
     // Test splitting
+    printf("Splitting:\n");
     p1 = my_malloc(64);
     my_free(p1);
-    printf("test\n");
     p1 = my_malloc(20);
     p2 = my_malloc(20);
     printf("p1: %p, p1 + HEADER_SIZE + 20: %p, p2: %p\n\n", p1, (void *)p1 + HEADER_SIZE + 20, p2);
     assert((void *)p1 + HEADER_SIZE + 20 == p2);
     my_free(p1);
     my_free(p2);
+
+    // Test free list
+    printf("Segregated Free List:\n");
+    p1 = my_malloc(8);
+    p2 = my_malloc(32);
+    void *p3 = my_malloc(128);
+    printf("p1: %p, p2: %p, p3: %p\n", p1, p2, p3);
+    printf("p1 Size: %lu, p2 Size: %lu, p3 Size: %lu\n", get_size(p1), get_size(p2), get_size(p3));
+    printf("free_lists[0]: %p, free_lists[1]: %p, free_lists[2]: %p\n\n", free_lists[0], free_lists[1], free_lists[2]);
+    my_free(p1);
+    my_free(p2);
+    my_free(p3);
+    assert(free_lists[0] == (void *)p1 - HEADER_SIZE);
+    assert(free_lists[1] == (void *)p2 - HEADER_SIZE);
+    assert(free_lists[2] == (void *)p3 - HEADER_SIZE);
 }
