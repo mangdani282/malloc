@@ -27,10 +27,23 @@ void set_footer(block_header_t *header) {
 }
 
 void add_to_free_list(block_header_t *header) {
+    // Get relevant free list
     size_t ind = get_list_ind(header->size);
+
+    // Add to free list
     header->next = free_lists[ind];
     if (free_lists[ind] != NULL) free_lists[ind]->prev = header;
     free_lists[ind] = header;
+}
+
+void remove_from_free_list(block_header_t *header) {
+    // Get relevant free list
+    size_t ind = get_list_ind(header->size);
+
+    // Remove from free list
+    if (header == free_lists[ind]) free_lists[ind] = header->next;
+    if (header->next != NULL) header->next->prev = header->prev;
+    if (header->prev != NULL) header->prev->next = header->next;
 }
 
 void *my_malloc(size_t size) {
@@ -44,14 +57,7 @@ void *my_malloc(size_t size) {
     for (block_header_t *p = free_lists[ind]; p != NULL; p = p->next) {
         if (p->size < size) continue;
 
-        // Prepare for giving out block
-        if (p == free_lists[ind]) {
-            free_lists[ind] = p->next;
-            if (free_lists[ind] != NULL) free_lists[ind]->prev = NULL;
-        } else {
-            p->prev->next = p->next;
-            p->next->prev = p->prev;
-        }
+        remove_from_free_list(p);
 
         // Split block if possible
         if (p->size > size + HEADER_SIZE + FOOTER_SIZE) {
@@ -77,10 +83,24 @@ void *my_malloc(size_t size) {
     }
 
     // If no block exists then ask system for more memory
-    block_header_t *block =
-        mmap(NULL, HEADER_SIZE + size + FOOTER_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    block_header_t *block = mmap(NULL, HEADER_SIZE * 3 + size + FOOTER_SIZE * 2, PROT_READ | PROT_WRITE,
+                                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (block == MAP_FAILED) return NULL;
 
+    // Place start sentinel block
+    block_header_t *sentinel = block;
+    sentinel->magic = MAGIC;
+    sentinel->size = 0;
+    sentinel->in_use = true;
+    set_footer(sentinel);
+    // Place end sentinel block
+    sentinel = (void *)block + HEADER_SIZE * 2 + size + FOOTER_SIZE * 2;
+    sentinel->magic = MAGIC;
+    sentinel->size = 0;
+    sentinel->in_use = true;
+
+    // Set block position and fill variables
+    block = (void *)block + HEADER_SIZE + FOOTER_SIZE;
     block->magic = MAGIC;
     block->size = size;
     block->in_use = true;
@@ -96,6 +116,37 @@ void my_free(void *ptr) {
     // Get header and mark it as free
     block_header_t *header = (void *)ptr - HEADER_SIZE;
     header->in_use = false;
+
+    // Coalesce forwards
+    block_header_t *next = (void *)header + HEADER_SIZE + header->size + FOOTER_SIZE;
+    while (next->magic == MAGIC && !next->in_use) {
+        remove_from_free_list(next);
+
+        // Update header and footer sizes
+        header->size += next->size + HEADER_SIZE + FOOTER_SIZE;
+        set_footer(header);
+
+        // Check next possible forward coalesce
+        next = (void *)header + HEADER_SIZE + header->size + FOOTER_SIZE;
+    }
+
+    // Coalesce backwards
+    size_t *prev_footer = (void *)header - FOOTER_SIZE;
+    block_header_t *prev = (void *)prev_footer - *prev_footer - HEADER_SIZE;
+    while (prev->magic == MAGIC && !prev->in_use) {
+        remove_from_free_list(prev);
+
+        // Update header and footer sizes
+        prev->size += header->size + HEADER_SIZE + FOOTER_SIZE;
+        set_footer(prev);
+
+        // Change header variable being added to free_list
+        header = prev;
+
+        // Check next possible backwards coalesce
+        prev_footer = (void *)header - FOOTER_SIZE;
+        prev = (void *)prev_footer - *prev_footer - HEADER_SIZE;
+    }
 
     add_to_free_list(header);
 }
