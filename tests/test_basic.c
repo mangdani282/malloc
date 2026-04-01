@@ -117,7 +117,7 @@ int main() {
 
     // Test splitting
     printf("Splitting:\n");
-    p1 = my_malloc(170);
+    p1 = my_malloc(65 * 2 + HEADER_SIZE + FOOTER_SIZE);
     my_free(p1);
     p1 = my_malloc(65);
     p2 = my_malloc(65);

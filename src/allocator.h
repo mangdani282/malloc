@@ -8,7 +8,7 @@ typedef struct block_header {
     size_t magic;
     size_t size;
     bool in_use;
-    struct block_header *next;
+    struct block_header *next, *prev;
 } block_header_t;
 
 #define HEADER_SIZE sizeof(block_header_t)

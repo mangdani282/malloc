@@ -26,6 +26,13 @@ void set_footer(block_header_t *header) {
     *footer = header->size;
 }
 
+void add_to_free_list(block_header_t *header) {
+    size_t ind = get_list_ind(header->size);
+    header->next = free_lists[ind];
+    if (free_lists[ind] != NULL) free_lists[ind]->prev = header;
+    free_lists[ind] = header;
+}
+
 void *my_malloc(size_t size) {
     // Check for edge case
     if (size == 0) return NULL;
@@ -34,18 +41,17 @@ void *my_malloc(size_t size) {
     size_t ind = get_list_ind(size);
 
     // Check free list
-    block_header_t *prev = NULL;
     for (block_header_t *p = free_lists[ind]; p != NULL; p = p->next) {
-        if (p->size < size) {
-            prev = p;
-            continue;
-        }
+        if (p->size < size) continue;
 
         // Prepare for giving out block
-        if (p == free_lists[ind])
+        if (p == free_lists[ind]) {
             free_lists[ind] = p->next;
-        else
-            prev->next = p->next;
+            if (free_lists[ind] != NULL) free_lists[ind]->prev = NULL;
+        } else {
+            p->prev->next = p->next;
+            p->next->prev = p->prev;
+        }
 
         // Split block if possible
         if (p->size > size + HEADER_SIZE + FOOTER_SIZE) {
@@ -53,11 +59,9 @@ void *my_malloc(size_t size) {
             split->magic = MAGIC;
             split->size = p->size - size - HEADER_SIZE - FOOTER_SIZE;
             split->in_use = false;
+            split->prev = NULL;
 
-            // Add split block to corresponding free list
-            size_t split_ind = get_list_ind(split->size);
-            split->next = free_lists[split_ind];
-            free_lists[split_ind] = split;
+            add_to_free_list(split);
 
             // Change current block size
             p->size = size;
@@ -81,6 +85,7 @@ void *my_malloc(size_t size) {
     block->size = size;
     block->in_use = true;
     block->next = NULL;
+    block->prev = NULL;
 
     set_footer(block);
 
@@ -92,12 +97,7 @@ void my_free(void *ptr) {
     block_header_t *header = (void *)ptr - HEADER_SIZE;
     header->in_use = false;
 
-    // Get relevant free list
-    size_t ind = get_list_ind(header->size);
-
-    // Add block back to free list
-    header->next = free_lists[ind];
-    free_lists[ind] = header;
+    add_to_free_list(header);
 }
 
 void *my_realloc(void *ptr, size_t size) {
