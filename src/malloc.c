@@ -5,6 +5,8 @@
 
 #include "allocator.h"
 
+#define MAGIC 0xDEADBEEF
+
 block_header_t *free_lists[3];
 
 size_t get_list_ind(size_t size) {
@@ -17,6 +19,11 @@ size_t get_list_ind(size_t size) {
         return 1;
     else
         return 2;
+}
+
+void set_footer(block_header_t *header) {
+    size_t *footer = (void *)header + HEADER_SIZE + header->size;
+    *footer = header->size;
 }
 
 void *my_malloc(size_t size) {
@@ -41,9 +48,10 @@ void *my_malloc(size_t size) {
             prev->next = p->next;
 
         // Split block if possible
-        if (p->size > size + HEADER_SIZE) {
-            block_header_t *split = (void *)p + HEADER_SIZE + size;
-            split->size = p->size - size - HEADER_SIZE;
+        if (p->size > size + HEADER_SIZE + FOOTER_SIZE) {
+            block_header_t *split = (void *)p + HEADER_SIZE + size + FOOTER_SIZE;
+            split->magic = MAGIC;
+            split->size = p->size - size - HEADER_SIZE - FOOTER_SIZE;
             split->in_use = false;
 
             // Add split block to corresponding free list
@@ -53,6 +61,9 @@ void *my_malloc(size_t size) {
 
             // Change current block size
             p->size = size;
+
+            set_footer(p);
+            set_footer(split);
         }
 
         p->in_use = true;
@@ -62,12 +73,16 @@ void *my_malloc(size_t size) {
     }
 
     // If no block exists then ask system for more memory
-    block_header_t *block = mmap(NULL, HEADER_SIZE + size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    block_header_t *block =
+        mmap(NULL, HEADER_SIZE + size + FOOTER_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (block == MAP_FAILED) return NULL;
 
+    block->magic = MAGIC;
     block->size = size;
     block->in_use = true;
     block->next = NULL;
+
+    set_footer(block);
 
     return (void *)block + HEADER_SIZE;
 }

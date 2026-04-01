@@ -117,12 +117,13 @@ int main() {
 
     // Test splitting
     printf("Splitting:\n");
-    p1 = my_malloc(64);
+    p1 = my_malloc(170);
     my_free(p1);
-    p1 = my_malloc(20);
-    p2 = my_malloc(20);
-    printf("p1: %p, p1 + HEADER_SIZE + 20: %p, p2: %p\n\n", p1, (void *)p1 + HEADER_SIZE + 20, p2);
-    assert((void *)p1 + HEADER_SIZE + 20 == p2);
+    p1 = my_malloc(65);
+    p2 = my_malloc(65);
+    printf("p1: %p, p1 + 65 + FOOTER_SIZE + HEADER_SIZE: %p, p2: %p\n\n", p1,
+           (void *)p1 + 65 + FOOTER_SIZE + HEADER_SIZE, p2);
+    assert((void *)p1 + 65 + FOOTER_SIZE + HEADER_SIZE == p2);
     my_free(p1);
     my_free(p2);
 
