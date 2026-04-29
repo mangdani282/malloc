@@ -31,7 +31,9 @@ void add_to_free_list(block_header_t *header) {
     size_t ind = get_list_ind(header->size);
 
     // Add to free list
+    header->in_use = false;
     header->next = free_lists[ind];
+    header->prev = NULL;
     if (free_lists[ind] != NULL) free_lists[ind]->prev = header;
     free_lists[ind] = header;
 }
@@ -44,6 +46,10 @@ void remove_from_free_list(block_header_t *header) {
     if (header == free_lists[ind]) free_lists[ind] = header->next;
     if (header->next != NULL) header->next->prev = header->prev;
     if (header->prev != NULL) header->prev->next = header->next;
+
+    header->in_use = true;
+    header->next = NULL;
+    header->prev = NULL;
 }
 
 void *my_malloc(size_t size) {
@@ -64,8 +70,6 @@ void *my_malloc(size_t size) {
             block_header_t *split = (void *)p + HEADER_SIZE + size + FOOTER_SIZE;
             split->magic = MAGIC;
             split->size = p->size - size - HEADER_SIZE - FOOTER_SIZE;
-            split->in_use = false;
-            split->prev = NULL;
 
             add_to_free_list(split);
 
