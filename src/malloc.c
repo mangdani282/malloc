@@ -7,6 +7,9 @@
 
 #define MAGIC 0xDEADBEEF
 
+size_t total_user_bytes = 0;
+size_t total_os_bytes = 0;
+
 block_header_t *free_lists[3];
 
 size_t get_list_ind(size_t size) {
@@ -84,6 +87,7 @@ void *my_malloc(size_t size) {
         p->next = NULL;
         p->prev = NULL;
 
+        total_user_bytes += HEADER_SIZE + p->size + FOOTER_SIZE;
         return (void *)p + HEADER_SIZE;
     }
 
@@ -91,6 +95,7 @@ void *my_malloc(size_t size) {
     block_header_t *block = mmap(NULL, HEADER_SIZE * 3 + size + FOOTER_SIZE * 2, PROT_READ | PROT_WRITE,
                                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (block == MAP_FAILED) return NULL;
+    total_os_bytes += HEADER_SIZE * 3 + size + FOOTER_SIZE * 2;
 
     // Place start sentinel block
     block_header_t *sentinel = block;
@@ -118,6 +123,7 @@ void *my_malloc(size_t size) {
 
     set_footer(block);
 
+    total_user_bytes += HEADER_SIZE + block->size + FOOTER_SIZE;
     return (void *)block + HEADER_SIZE;
 }
 
@@ -125,6 +131,8 @@ void my_free(void *ptr) {
     // Get header and mark it as free
     block_header_t *header = (void *)ptr - HEADER_SIZE;
     header->in_use = false;
+
+    total_user_bytes -= HEADER_SIZE + header->size + FOOTER_SIZE;
 
     // Coalesce forwards
     block_header_t *next = (void *)header + HEADER_SIZE + header->size + FOOTER_SIZE;

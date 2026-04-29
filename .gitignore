@@ -64,6 +64,8 @@ vcpkg_installed
 malloc
 test_basic
 test_stress
+bench_mine
+bench_glibc
 
 # Core dumps
 core
