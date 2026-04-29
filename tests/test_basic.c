@@ -27,6 +27,13 @@ int main() {
     assert(header->size >= str_size);
     assert(header->in_use);
     my_free(str);
+    // Check sentinal blocks
+    block_header_t *sen_start = (void *)str - HEADER_SIZE - FOOTER_SIZE - HEADER_SIZE;
+    block_header_t *sen_end = (void *)str + str_size + FOOTER_SIZE;
+    assert(sen_start->size == 0);
+    assert(sen_start->in_use);
+    assert(sen_end->size == 0);
+    assert(sen_end->in_use);
     // Test free function
     assert(!header->in_use);
     str = NULL;
