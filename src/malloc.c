@@ -78,6 +78,7 @@ void *my_malloc(size_t size) {
 
         p->in_use = true;
         p->next = NULL;
+        p->prev = NULL;
 
         return (void *)p + HEADER_SIZE;
     }
@@ -92,12 +93,16 @@ void *my_malloc(size_t size) {
     sentinel->magic = MAGIC;
     sentinel->size = 0;
     sentinel->in_use = true;
+    sentinel->next = NULL;
+    sentinel->prev = NULL;
     set_footer(sentinel);
     // Place end sentinel block
     sentinel = (void *)block + HEADER_SIZE * 2 + size + FOOTER_SIZE * 2;
     sentinel->magic = MAGIC;
     sentinel->size = 0;
     sentinel->in_use = true;
+    sentinel->next = NULL;
+    sentinel->prev = NULL;
 
     // Set block position and fill variables
     block = (void *)block + HEADER_SIZE + FOOTER_SIZE;
