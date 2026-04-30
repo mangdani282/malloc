@@ -11,6 +11,8 @@
 #define CALLOC calloc
 #else
 #include "../src/allocator.h"
+extern size_t total_user_bytes;
+extern size_t total_os_bytes;
 #define MALLOC my_malloc
 #define FREE my_free
 #define REALLOC my_realloc
@@ -79,4 +81,8 @@ int main() {
     }
     sec = (double)(clock() - start) / CLOCKS_PER_SEC;
     printf("Completed %lu cycles of random free/allocations in a pool in %fs\n", NUM_CYCLES, sec);
+
+#ifndef USE_SYSTEM_MALLOC
+    printf("Fragmentation ratio: %.2f\n", (double)total_os_bytes / total_user_bytes);
+#endif
 }

@@ -14,10 +14,15 @@ typedef struct block_header {
 #define HEADER_SIZE sizeof(block_header_t)
 #define FOOTER_SIZE sizeof(size_t)
 
+#define CHUNK_SIZE 65536
+
+#define NUM_FREE_LISTS 16
+extern block_header_t *free_lists[NUM_FREE_LISTS];
+
+#define MAGIC 0xDEADBEEF
+
 extern size_t total_user_bytes;
 extern size_t total_os_bytes;
-
-extern block_header_t *free_lists[3];
 
 void *my_malloc(size_t size);
 void my_free(void *ptr);

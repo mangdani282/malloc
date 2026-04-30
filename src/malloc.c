@@ -5,23 +5,18 @@
 
 #include "allocator.h"
 
-#define MAGIC 0xDEADBEEF
-
 size_t total_user_bytes = 0;
 size_t total_os_bytes = 0;
 
-block_header_t *free_lists[3];
+block_header_t *free_lists[NUM_FREE_LISTS];
 
 size_t get_list_ind(size_t size) {
-    // 0-16 bytes -> free_list[0]
-    // 17-64 bytes -> free_list[1]
-    // 65+ bytes -> free_list[2]
-    if (size <= 16)
-        return 0;
-    else if (size <= 64)
-        return 1;
-    else
-        return 2;
+    size_t ind = 0;
+    while (size > 1 && ind < NUM_FREE_LISTS - 1) {
+        size >>= 1;
+        ind++;
+    }
+    return ind;
 }
 
 void set_footer(block_header_t *header) {
@@ -55,6 +50,25 @@ void remove_from_free_list(block_header_t *header) {
     header->prev = NULL;
 }
 
+void split_block(block_header_t *header, size_t size) {
+    if (header->size - size > HEADER_SIZE + FOOTER_SIZE) {
+        block_header_t *split = (void *)header + HEADER_SIZE + size + FOOTER_SIZE;
+        split->magic = MAGIC;
+        split->size = header->size - size - HEADER_SIZE - FOOTER_SIZE;
+        split->in_use = false;
+        split->next = NULL;
+        split->prev = NULL;
+
+        // Change current block size
+        header->size = size;
+
+        set_footer(header);
+        set_footer(split);
+
+        add_to_free_list(split);
+    }
+}
+
 void *my_malloc(size_t size) {
     // Check for edge case
     if (size == 0) return NULL;
@@ -63,39 +77,30 @@ void *my_malloc(size_t size) {
     size_t ind = get_list_ind(size);
 
     // Check free list
-    for (block_header_t *p = free_lists[ind]; p != NULL; p = p->next) {
-        if (p->size < size) continue;
+    for (int i = ind; i < NUM_FREE_LISTS; i++) {
+        for (block_header_t *p = free_lists[i]; p != NULL; p = p->next) {
+            if (p->size < size) continue;
 
-        remove_from_free_list(p);
+            remove_from_free_list(p);
 
-        // Split block if possible
-        if (p->size > size + HEADER_SIZE + FOOTER_SIZE) {
-            block_header_t *split = (void *)p + HEADER_SIZE + size + FOOTER_SIZE;
-            split->magic = MAGIC;
-            split->size = p->size - size - HEADER_SIZE - FOOTER_SIZE;
+            // Split block if possible
+            split_block(p, size);
 
-            add_to_free_list(split);
+            p->in_use = true;
+            p->next = NULL;
+            p->prev = NULL;
 
-            // Change current block size
-            p->size = size;
-
-            set_footer(p);
-            set_footer(split);
+            total_user_bytes += p->size;
+            return (void *)p + HEADER_SIZE;
         }
-
-        p->in_use = true;
-        p->next = NULL;
-        p->prev = NULL;
-
-        total_user_bytes += HEADER_SIZE + p->size + FOOTER_SIZE;
-        return (void *)p + HEADER_SIZE;
     }
 
     // If no block exists then ask system for more memory
-    block_header_t *block = mmap(NULL, HEADER_SIZE * 3 + size + FOOTER_SIZE * 2, PROT_READ | PROT_WRITE,
-                                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    size_t alloc_size =
+        (CHUNK_SIZE > HEADER_SIZE * 3 + size + FOOTER_SIZE * 2) ? CHUNK_SIZE : HEADER_SIZE * 3 + size + FOOTER_SIZE * 2;
+    block_header_t *block = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (block == MAP_FAILED) return NULL;
-    total_os_bytes += HEADER_SIZE * 3 + size + FOOTER_SIZE * 2;
+    total_os_bytes += alloc_size;
 
     // Place start sentinel block
     block_header_t *sentinel = block;
@@ -106,7 +111,7 @@ void *my_malloc(size_t size) {
     sentinel->prev = NULL;
     set_footer(sentinel);
     // Place end sentinel block
-    sentinel = (void *)block + HEADER_SIZE * 2 + size + FOOTER_SIZE * 2;
+    sentinel = (void *)block + alloc_size - HEADER_SIZE;
     sentinel->magic = MAGIC;
     sentinel->size = 0;
     sentinel->in_use = true;
@@ -116,23 +121,28 @@ void *my_malloc(size_t size) {
     // Set block position and fill variables
     block = (void *)block + HEADER_SIZE + FOOTER_SIZE;
     block->magic = MAGIC;
-    block->size = size;
+    block->size = alloc_size - HEADER_SIZE * 3 - FOOTER_SIZE * 2;
     block->in_use = true;
     block->next = NULL;
     block->prev = NULL;
 
     set_footer(block);
 
-    total_user_bytes += HEADER_SIZE + block->size + FOOTER_SIZE;
+    split_block(block, size);
+
+    total_user_bytes += block->size;
     return (void *)block + HEADER_SIZE;
 }
 
 void my_free(void *ptr) {
-    // Get header and mark it as free
+    // Check edge cases
+    if (ptr == NULL) return;
     block_header_t *header = (void *)ptr - HEADER_SIZE;
+    if (header->magic != MAGIC) return;
+
     header->in_use = false;
 
-    total_user_bytes -= HEADER_SIZE + header->size + FOOTER_SIZE;
+    total_user_bytes -= header->size;
 
     // Coalesce forwards
     block_header_t *next = (void *)header + HEADER_SIZE + header->size + FOOTER_SIZE;
@@ -144,7 +154,7 @@ void my_free(void *ptr) {
         set_footer(header);
 
         // Check next possible forward coalesce
-        next = (void *)header + HEADER_SIZE + header->size + FOOTER_SIZE;
+        next = (void *)next + HEADER_SIZE + next->size + FOOTER_SIZE;
     }
 
     // Coalesce backwards
@@ -176,13 +186,40 @@ void *my_realloc(void *ptr, size_t size) {
         return NULL;
     }
 
+    block_header_t *header = (void *)ptr - HEADER_SIZE;
+    if (header->size >= size) {
+        // Split block if possible
+        split_block(header, size);
+
+        return ptr;
+    }
+
+    size_t old_size = header->size;
+
+    // Try to realloc in-place
+    block_header_t *next = (void *)header + HEADER_SIZE + header->size + FOOTER_SIZE;
+    while (header->size < size && next->magic == MAGIC && !next->in_use) {
+        remove_from_free_list(next);
+
+        // Update header and footer sizes
+        header->size += next->size + HEADER_SIZE + FOOTER_SIZE;
+        set_footer(header);
+
+        next = (void *)next + HEADER_SIZE + next->size + FOOTER_SIZE;
+    }
+    if (header->size >= size) {
+        // Split block if possible
+        split_block(header, size);
+        return ptr;
+    }
+
     // Create new block of memory
     void *new_ptr = my_malloc(size);
     if (new_ptr == NULL) return NULL;
-    block_header_t *old_header = (void *)ptr - HEADER_SIZE, *new_header = (void *)new_ptr - HEADER_SIZE;
+    block_header_t *new_header = (void *)new_ptr - HEADER_SIZE;
 
     // Move memory over
-    size_t move_size = (old_header->size < new_header->size) ? old_header->size : new_header->size;
+    size_t move_size = (old_size < new_header->size) ? old_size : new_header->size;
     memcpy(new_ptr, ptr, move_size);
 
     // Free old block
