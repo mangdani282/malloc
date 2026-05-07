@@ -83,6 +83,6 @@ int main() {
     printf("Completed %lu cycles of random free/allocations in a pool in %fs\n", NUM_CYCLES, sec);
 
 #ifndef USE_SYSTEM_MALLOC
-    printf("Fragmentation ratio: %.2f\n", (double)total_os_bytes / total_user_bytes);
+    printf("Fragmentation ratio: %.2f\n", (double)total_os_bytes / peak_user_bytes);
 #endif
 }

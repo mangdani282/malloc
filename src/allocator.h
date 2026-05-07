@@ -14,17 +14,33 @@ typedef struct block_header {
 #define HEADER_SIZE sizeof(block_header_t)
 #define FOOTER_SIZE sizeof(size_t)
 
-#define CHUNK_SIZE 65536
-
 #define ALIGN 16
+
+#define TCACHE_MAX_SIZE 512
+#define TCACHE_BINS (TCACHE_MAX_SIZE / ALIGN)
+#define TCACHE_COUNT 32
+
+typedef struct tcache_entry {
+    struct tcache_entry *next;
+} tcache_entry_t;
+
+typedef struct tcache_bin {
+    tcache_entry_t *head;
+    size_t count;
+} tcache_bin_t;
+
+extern __thread tcache_bin_t tcache[TCACHE_BINS];
 
 #define NUM_FREE_LISTS 16
 extern block_header_t *free_lists[NUM_FREE_LISTS];
 
+#define CHUNK_SIZE 65536
+
 #define MAGIC 0xDEADBEEF
 
-extern size_t total_user_bytes;
 extern size_t total_os_bytes;
+extern size_t total_user_bytes;
+extern size_t peak_user_bytes;
 
 void *my_malloc(size_t size);
 void my_free(void *ptr);

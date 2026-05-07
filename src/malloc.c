@@ -5,8 +5,11 @@
 
 #include "allocator.h"
 
-size_t total_user_bytes = 0;
 size_t total_os_bytes = 0;
+size_t total_user_bytes = 0;
+size_t peak_user_bytes = 0;
+
+__thread tcache_bin_t tcache[TCACHE_BINS];
 
 block_header_t *free_lists[NUM_FREE_LISTS];
 
@@ -18,6 +21,8 @@ size_t get_list_ind(size_t size) {
     }
     return ind;
 }
+
+size_t get_tcache_ind(size_t size) { return (size / ALIGN) - 1; }
 
 void set_footer(block_header_t *header) {
     size_t *footer = (void *)header + HEADER_SIZE + header->size;
@@ -76,6 +81,27 @@ void *my_malloc(size_t size) {
     // Align block sizes to multiples of ALIGN
     size = (size + (ALIGN - 1)) & ~(ALIGN - 1);
 
+    // Check tcache first
+    if (size <= TCACHE_MAX_SIZE) {
+        size_t ind = get_tcache_ind(size);
+        tcache_bin_t *bin = &tcache[ind];
+
+        // If bin isn't empty
+        if (bin->head) {
+            // Remove entry from bin
+            tcache_entry_t *entry = bin->head;
+            bin->head = entry->next;
+            bin->count--;
+
+            block_header_t *header = (void *)entry - HEADER_SIZE;
+
+            total_user_bytes += header->size;
+            if (total_user_bytes > peak_user_bytes) peak_user_bytes = total_user_bytes;
+
+            return (void *)header + HEADER_SIZE;
+        }
+    }
+
     // Get relevant free list
     size_t ind = get_list_ind(size);
 
@@ -94,6 +120,8 @@ void *my_malloc(size_t size) {
             p->prev = NULL;
 
             total_user_bytes += p->size;
+            if (total_user_bytes > peak_user_bytes) peak_user_bytes = total_user_bytes;
+
             return (void *)p + HEADER_SIZE;
         }
     }
@@ -134,6 +162,8 @@ void *my_malloc(size_t size) {
     split_block(block, size);
 
     total_user_bytes += block->size;
+    if (total_user_bytes > peak_user_bytes) peak_user_bytes = total_user_bytes;
+
     return (void *)block + HEADER_SIZE;
 }
 
@@ -143,9 +173,31 @@ void my_free(void *ptr) {
     block_header_t *header = (void *)ptr - HEADER_SIZE;
     if (header->magic != MAGIC) return;
 
+    total_user_bytes -= header->size;
+
+    // Free to tcache if possible
+    if (header->size <= TCACHE_MAX_SIZE) {
+        size_t ind = get_tcache_ind(header->size);
+        tcache_bin_t *bin = &tcache[ind];
+
+        // If bin has room, add block to bin
+        if (bin->count < TCACHE_COUNT) {
+            tcache_entry_t *entry = (void *)header + HEADER_SIZE;
+            entry->next = bin->head;
+            bin->head = entry;
+            bin->count++;
+
+            return;
+        }
+    }
+
     header->in_use = false;
 
-    total_user_bytes -= header->size;
+    // Defer coalescing for small blocks
+    if (header->size <= TCACHE_MAX_SIZE) {
+        add_to_free_list(header);
+        return;
+    }
 
     // Coalesce forwards
     block_header_t *next = (void *)header + HEADER_SIZE + header->size + FOOTER_SIZE;
@@ -189,6 +241,9 @@ void *my_realloc(void *ptr, size_t size) {
         return NULL;
     }
 
+    // Align block sizes to multiples of ALIGN
+    size = (size + (ALIGN - 1)) & ~(ALIGN - 1);
+
     block_header_t *header = (void *)ptr - HEADER_SIZE;
     if (header->size >= size) {
         // Split block if possible
@@ -208,7 +263,7 @@ void *my_realloc(void *ptr, size_t size) {
         header->size += next->size + HEADER_SIZE + FOOTER_SIZE;
         set_footer(header);
 
-        next = (void *)next + HEADER_SIZE + next->size + FOOTER_SIZE;
+        next = (void *)header + HEADER_SIZE + header->size + FOOTER_SIZE;
     }
     if (header->size >= size) {
         // Split block if possible
