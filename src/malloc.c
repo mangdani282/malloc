@@ -12,7 +12,7 @@ block_header_t *free_lists[NUM_FREE_LISTS];
 
 size_t get_list_ind(size_t size) {
     size_t ind = 0;
-    while (size > 1 && ind < NUM_FREE_LISTS - 1) {
+    while (size > ALIGN && ind < NUM_FREE_LISTS - 1) {
         size >>= 1;
         ind++;
     }
@@ -72,6 +72,9 @@ void split_block(block_header_t *header, size_t size) {
 void *my_malloc(size_t size) {
     // Check for edge case
     if (size == 0) return NULL;
+
+    // Align block sizes to multiples of ALIGN
+    size = (size + (ALIGN - 1)) & ~(ALIGN - 1);
 
     // Get relevant free list
     size_t ind = get_list_ind(size);

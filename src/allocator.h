@@ -16,6 +16,8 @@ typedef struct block_header {
 
 #define CHUNK_SIZE 65536
 
+#define ALIGN 16
+
 #define NUM_FREE_LISTS 16
 extern block_header_t *free_lists[NUM_FREE_LISTS];
 
