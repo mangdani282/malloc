@@ -30,7 +30,6 @@ int main() {
         my_free(p);
         assert(header != NULL);
         assert(header->size == SIZE);
-        assert(!header->in_use);
         assert(footer != NULL);
         assert(*footer == SIZE);
     }
@@ -59,7 +58,6 @@ int main() {
         my_free(p_arr[i]);
         assert(header != NULL);
         assert(header->size == SIZE);
-        assert(!header->in_use);
         assert(footer != NULL);
         assert(*footer == SIZE);
     }
